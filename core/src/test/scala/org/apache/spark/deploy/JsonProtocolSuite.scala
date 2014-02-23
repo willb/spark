@@ -20,8 +20,12 @@ package org.apache.spark.deploy
 import java.io.File
 import java.util.Date
 
-import net.liftweb.json.{JsonAST, JsonParser}
-import net.liftweb.json.JsonAST.JValue
+import org.json4s._
+
+import org.json4s.JValue
+import org.json4s.jackson.JsonMethods
+import com.fasterxml.jackson.core.JsonParseException
+
 import org.scalatest.FunSuite
 
 import org.apache.spark.deploy.DeployMessages.{MasterStateResponse, WorkerStateResponse}
@@ -32,21 +36,31 @@ class JsonProtocolSuite extends FunSuite {
   test("writeApplicationInfo") {
     val output = JsonProtocol.writeApplicationInfo(createAppInfo())
     assertValidJson(output)
+    assertValidDataInJson(output, JsonMethods.parse(JsonConstants.appInfoJsonStr))
   }
 
   test("writeWorkerInfo") {
     val output = JsonProtocol.writeWorkerInfo(createWorkerInfo())
     assertValidJson(output)
+    assertValidDataInJson(output, JsonMethods.parse(JsonConstants.workerInfoJsonStr))
   }
 
   test("writeApplicationDescription") {
     val output = JsonProtocol.writeApplicationDescription(createAppDesc())
     assertValidJson(output)
+    assertValidDataInJson(output, JsonMethods.parse(JsonConstants.appDescJsonStr))
   }
 
   test("writeExecutorRunner") {
     val output = JsonProtocol.writeExecutorRunner(createExecutorRunner())
     assertValidJson(output)
+    assertValidDataInJson(output, JsonMethods.parse(JsonConstants.executorRunnerJsonStr))
+  }
+
+  test("writeDriverInfo") {
+    val output = JsonProtocol.writeDriverInfo(createDriverInfo())
+    assertValidJson(output)
+    assertValidDataInJson(output, JsonMethods.parse(JsonConstants.driverInfoJsonStr))
   }
 
   test("writeMasterState") {
@@ -59,6 +73,7 @@ class JsonProtocolSuite extends FunSuite {
       activeDrivers, completedDrivers, RecoveryState.ALIVE)
     val output = JsonProtocol.writeMasterState(stateResponse)
     assertValidJson(output)
+    assertValidDataInJson(output, JsonMethods.parse(JsonConstants.masterStateJsonStr))
   }
 
   test("writeWorkerState") {
@@ -70,6 +85,7 @@ class JsonProtocolSuite extends FunSuite {
       finishedExecutors, drivers, finishedDrivers, "masterUrl", 4, 1234, 4, 1234, "masterWebUiUrl")
     val output = JsonProtocol.writeWorkerState(stateResponse)
     assertValidJson(output)
+    assertValidDataInJson(output, JsonMethods.parse(JsonConstants.workerStateJsonStr))
   }
 
   def createAppDesc(): ApplicationDescription = {
@@ -106,9 +122,9 @@ class JsonProtocolSuite extends FunSuite {
 
   def assertValidJson(json: JValue) {
     try {
-      JsonParser.parse(JsonAST.compactRender(json))
+      JsonMethods.parse(JsonMethods.compact(json))
     } catch {
-      case e: JsonParser.ParseException => fail("Invalid Json detected", e)
+      case e: JsonParseException => fail("Invalid Json detected", e)
     }
   }
 }
