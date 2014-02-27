@@ -26,10 +26,8 @@ import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.{Logging, HashPartitioner, Partitioner, SparkContext, SparkConf}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.rdd.RDD
-import org.apache.spark.serializer.KryoRegistrator
 import org.apache.spark.SparkContext._
 
-import com.esotericsoftware.kryo.Kryo
 import org.jblas.{DoubleMatrix, SimpleBlas, Solve}
 
 
@@ -641,12 +639,6 @@ object ALS {
     trainImplicit(ratings, rank, iterations, 0.01, -1, 1.0)
   }
 
-  private class ALSRegistrator extends KryoRegistrator {
-    override def registerClasses(kryo: Kryo) {
-      kryo.register(classOf[Rating])
-    }
-  }
-
   def main(args: Array[String]) {
     if (args.length < 5 || args.length > 9) {
       println("Usage: ALS <master> <ratings_file> <rank> <iterations> <output_dir> " +
@@ -660,10 +652,6 @@ object ALS {
     val alpha = if (args.length >= 8) args(7).toDouble else 1
     val blocks = if (args.length == 9) args(8).toInt else -1
     val conf = new SparkConf()
-      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .set("spark.kryo.registrator",  classOf[ALSRegistrator].getName)
-      .set("spark.kryo.referenceTracking", "false")
-      .set("spark.kryoserializer.buffer.mb", "8")
       .set("spark.locality.wait", "10000")
     val sc = new SparkContext(master, "ALS", conf)
 
