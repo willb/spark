@@ -18,8 +18,6 @@
 import sbt._
 import sbt.Classpaths.publishTask
 import Keys._
-import sbtassembly.Plugin._
-import AssemblyKeys._
 import scala.util.Properties
 // For Sonatype publishing
 //import com.jsuereth.pgp.sbtplugin.PgpKeys._
@@ -59,17 +57,6 @@ object SparkBuild extends Build {
   lazy val streaming = Project("streaming", file("streaming"), settings = streamingSettings) dependsOn(core)
 
   lazy val mllib = Project("mllib", file("mllib"), settings = mllibSettings) dependsOn(core)
-
-  lazy val assemblyProj = Project("assembly", file("assembly"), settings = assemblyProjSettings)
-    .dependsOn(core, graphx, bagel, mllib, repl, streaming) dependsOn(maybeYarn: _*) dependsOn(maybeGanglia: _*)
-
-  lazy val assembleDeps = TaskKey[Unit]("assemble-deps", "Build assembly of dependencies and packages Spark projects")
-
-  // A dummy command so we can run the Jenkins pull request builder for older versions of Spark.
-  lazy val scalastyle = TaskKey[Unit]("scalastyle", "Dummy scalastyle check")
-  val scalastyleTask = scalastyle := {
-    println("scalastyle is not configured for this version of Spark project.")
-  }
 
   // A configuration to set an alternative publishLocalConfiguration
   lazy val MavenCompile = config("m2r") extend(Compile)
@@ -130,7 +117,7 @@ object SparkBuild extends Build {
   // Everything except assembly, tools and examples belong to packageProjects
   lazy val packageProjects = Seq[ProjectReference](core, repl, bagel, streaming, mllib, graphx) ++ maybeYarnRef ++ maybeGangliaRef
 
-  lazy val allProjects = packageProjects ++ allExternalRefs ++ Seq[ProjectReference](examples, tools, assemblyProj)
+  lazy val allProjects = packageProjects ++ allExternalRefs ++ Seq[ProjectReference](examples, tools)
 
   def sharedSettings = Defaults.defaultSettings ++ Seq(
     organization       := "org.apache.spark",
@@ -143,7 +130,6 @@ object SparkBuild extends Build {
     retrieveManaged := true,
     retrievePattern := "[type]s/[artifact](-[revision])(-[classifier]).[ext]",
     transitiveClassifiers in Scope.GlobalScope := Seq("sources"),
-    testListeners <<= target.map(t => Seq(new eu.henkelmann.sbt.JUnitXmlTestsListener(t.getAbsolutePath))),
 
     // Fork new JVMs for tests and set Java options for those
     fork := true,
@@ -245,8 +231,8 @@ object SparkBuild extends Build {
     publishMavenStyle in MavenCompile := true,
     publishLocal in MavenCompile <<= publishTask(publishLocalConfiguration in MavenCompile, deliverLocal),
     publishLocalBoth <<= Seq(publishLocal in MavenCompile, publishLocal).dependOn
-  ) ++ net.virtualvoid.sbt.graph.Plugin.graphSettings
-
+  )
+  
   val slf4jVersion = "1.7.2"
 
   val excludeCglib = ExclusionRule(organization = "org.sonatype.sisu.inject")
@@ -322,11 +308,11 @@ object SparkBuild extends Build {
         excludeAll(excludeSnappy)
         excludeAll(excludeCglib)
     )
-  ) ++ assemblySettings ++ extraAssemblySettings
+  )
 
   def toolsSettings = sharedSettings ++ Seq(
     name := "spark-tools"
-  ) ++ assemblySettings ++ extraAssemblySettings
+  )
 
   def graphxSettings = sharedSettings ++ Seq(
     name := "spark-graphx",
@@ -395,26 +381,6 @@ object SparkBuild extends Build {
     )
   )
 
-  def assemblyProjSettings = sharedSettings ++ Seq(
-    libraryDependencies += "net.sf.py4j" % "py4j" % "0.8.1",
-    name := "spark-assembly",
-    scalastyleTask,
-    assembleDeps in Compile <<= (packageProjects.map(packageBin in Compile in _) ++ Seq(packageDependency in Compile)).dependOn,
-    jarName in assembly <<= version map { v => "spark-assembly-" + v + "-hadoop" + hadoopVersion + ".jar" },
-    jarName in packageDependency <<= version map { v => "spark-assembly-" + v + "-hadoop" + hadoopVersion + "-deps.jar" }
-  ) ++ assemblySettings ++ extraAssemblySettings
-
-  def extraAssemblySettings() = Seq(
-    test in assembly := {},
-    mergeStrategy in assembly := {
-      case m if m.toLowerCase.endsWith("manifest.mf") => MergeStrategy.discard
-      case m if m.toLowerCase.matches("meta-inf.*\\.sf$") => MergeStrategy.discard
-      case "log4j.properties" => MergeStrategy.discard
-      case m if m.toLowerCase.startsWith("meta-inf/services/") => MergeStrategy.filterDistinctLines
-      case "reference.conf" => MergeStrategy.concat
-      case _ => MergeStrategy.first
-    }
-  )
 
   def twitterSettings() = sharedSettings ++ Seq(
     name := "spark-streaming-twitter",
