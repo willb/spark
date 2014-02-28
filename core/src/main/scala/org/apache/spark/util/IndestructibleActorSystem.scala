@@ -39,7 +39,7 @@ private[akka] class IndestructibleActorSystemImpl(
     override val name: String,
     applicationConfig: Config,
     classLoader: ClassLoader)
-  extends ActorSystemImpl(name, applicationConfig, classLoader) {
+  extends ActorSystemImpl(name, applicationConfig, classLoader, None) {
 
   protected override def uncaughtExceptionHandler: Thread.UncaughtExceptionHandler = {
     val fallbackHandler = super.uncaughtExceptionHandler
