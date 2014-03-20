@@ -1240,7 +1240,6 @@ class SparkContext(config: SparkConf) extends Logging {
    */
   private[spark] def clean[F <: AnyRef](f: F, checkSerializable: Boolean = true): F = {
     ClosureCleaner.clean(f, checkSerializable)
-    f
   }
 
   /**
