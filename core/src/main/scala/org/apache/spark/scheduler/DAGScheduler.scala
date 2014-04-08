@@ -813,13 +813,16 @@ class DAGScheduler(
     }
     val rsn = event.reason
     val res = event.result
-    logWarning(s"event is $event; reason is $rsn; result is $res")
+    val au = event.accumUpdates
+    logWarning(s"event is $event; accumUpdates is $au; reason is $rsn; result is ($res)")
     event.reason match {
       case Success =>
         logInfo("Completed " + task)
-        if (event.accumUpdates != null) {
+        if (event.accumUpdates != null) {	  
           Accumulators.add(event.accumUpdates) // TODO: do this only if task wasn't resubmitted
-        }
+        } else {
+	  logWarning("accumUpdates WAS NULL")
+	}
         pendingTasks(stage) -= task
         task match {
           case rt: ResultTask[_, _] =>

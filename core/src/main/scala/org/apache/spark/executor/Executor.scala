@@ -232,6 +232,8 @@ private[spark] class Executor(
 
         val accumUpdates = Accumulators.values
 
+	logWarning(s"about to fire off accumulator updates of $accumUpdates")
+
         val directResult = new DirectTaskResult(valueBytes, accumUpdates,
           task.metrics.getOrElse(null))
         val serializedDirectResult = ser.serialize(directResult)

@@ -480,6 +480,8 @@ private[spark] class TaskSetManager(
     val index = info.index
     info.markSuccessful()
     removeRunningTask(tid)
+    val au = result.accumUpdates
+    logWarning(s"completing a task successfully with $au for accumUpdates")
     sched.dagScheduler.taskEnded(
       tasks(index), Success, result.value, result.accumUpdates, info, result.metrics)
     if (!successful(index)) {

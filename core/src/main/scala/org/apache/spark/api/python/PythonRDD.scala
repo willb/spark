@@ -163,9 +163,7 @@ private[spark] class PythonRDD[T: ClassTag](
 		val updatevals = update.toList.map(_.toString).reduce(_ + ", " + _)
 		logWarning(s"processing update $x; values are $updatevals")
 		val sl = Collections.singletonList(update)
-	        logWarning(s"singleton list was $sl and accumulator value is " + accumulator.toString)
                 accumulator += sl
-		logWarning("accumulator value is now " + accumulator.toString)
               }
               Array.empty[Byte]
           }
@@ -211,7 +209,7 @@ private object SpecialLengths {
   val TIMING_DATA = -3
 }
 
-private[spark] object PythonRDD {
+private[spark] object PythonRDD extends Logging {
 
   def readRDDFromFile(sc: JavaSparkContext, filename: String, parallelism: Int):
   JavaRDD[Array[Byte]] = {
@@ -222,6 +220,8 @@ private[spark] object PythonRDD {
         val length = file.readInt()
         val obj = new Array[Byte](length)
         file.readFully(obj)
+	val updatevals = obj.toList.map(_.toString).reduce(_ + ", " + _)
+	logWarning(s"readRDDFromFile: got $updatevals")
         objs.append(obj)
       }
     } catch {

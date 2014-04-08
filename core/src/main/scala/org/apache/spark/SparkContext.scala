@@ -898,7 +898,8 @@ class SparkContext(
     val callSite = getCallSite
     // There's no need to check this function for serializability,
     // since it will be run right away.
-    val cleanedFunc = clean(func, false)
+    val alwaysCapture = sys.env.getOrElse("ALWAYS_CAPTURE", "false").toBoolean
+    val cleanedFunc = clean(func, alwaysCapture)
     logInfo("Starting job: " + callSite)
     val start = System.nanoTime
     dagScheduler.runJob(rdd, cleanedFunc, partitions, callSite, allowLocal,

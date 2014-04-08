@@ -24,6 +24,16 @@ import scala.collection.mutable.Map
 
 import org.apache.spark.serializer.JavaSerializer
 
+object Stringizer {
+  def stringize(x: Any): String = {
+    x match {
+      case ab: Array[Byte] => if (ab.size > 0) ab.toList.map {elt => elt.toString}.reduce(_ + ", " + _) else "Array[Byte]()"
+      case aab: java.util.List[Array[Byte]] => if (aab.size > 0) aab.get(0).toList.map(String.valueOf(_)).reduce(_ + ", " + _) else "List[Array[Byte]]()"
+      case _ => x.toString + " (type is " + x.getClass.toString + ")"
+    }
+  }
+}
+
 /**
  * A data type that can be accumulated, ie has an commutative and associative "add" operation,
  * but where the result type, `R`, may be different from the element type being added, `T`.
@@ -41,7 +51,7 @@ import org.apache.spark.serializer.JavaSerializer
 class Accumulable[R, T] (
     @transient initialValue: R,
     param: AccumulableParam[R, T])
-  extends Serializable {
+  extends Serializable with Logging {
 
   val id = Accumulators.newId
   @transient private var value_ = initialValue // Current value on master
@@ -54,7 +64,12 @@ class Accumulable[R, T] (
    * Add more data to this accumulator / accumulable
    * @param term the data to add
    */
-  def += (term: T) { value_ = param.addAccumulator(value_, term) }
+  def += (term: T) { 
+    logWarning("term is  " + Stringizer.stringize(term))
+    logWarning("my value was " + Stringizer.stringize(value_))
+    value_ = param.addAccumulator(value_, term) 
+    logWarning("my value is " + Stringizer.stringize(value_))
+  }
 
   /**
    * Add more data to this accumulator / accumulable
@@ -255,6 +270,7 @@ private object Accumulators extends Logging {
 
   // Clear the local (non-original) accumulators for the current thread
   def clear() {
+    logWarning("clearing all accumulators")
     synchronized {
       localAccums.remove(Thread.currentThread)
     }
@@ -271,10 +287,13 @@ private object Accumulators extends Logging {
 
   // Add values to the original accumulators with some given IDs
   def add(values: Map[Long, Any]): Unit = synchronized {
-    logWarning(s"calling Accumulators.add with $values (originals is $originals)")
     for ((id, value) <- values) {
+      logWarning(s"Accumulators.add is attempting to add $value to acc $id")
       if (originals.contains(id)) {
+	logWarning(s"originals contains $id")
         originals(id).asInstanceOf[Accumulable[Any, Any]] ++= value
+      } else {
+	logWarning(s"originals DID NOT contain $id")
       }
     }
   }
