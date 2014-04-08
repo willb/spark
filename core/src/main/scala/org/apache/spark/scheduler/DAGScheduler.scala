@@ -811,6 +811,9 @@ class DAGScheduler(
       listenerBus.post(SparkListenerStageCompleted(stageToInfos(stage)))
       runningStages -= stage
     }
+    val rsn = event.reason
+    val res = event.result
+    logWarning(s"event is $event; reason is $rsn; result is $res")
     event.reason match {
       case Success =>
         logInfo("Completed " + task)

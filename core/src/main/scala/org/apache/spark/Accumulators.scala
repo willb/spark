@@ -233,7 +233,7 @@ trait AccumulatorParam[T] extends AccumulableParam[T, T] {
 
 // TODO: The multi-thread support in accumulators is kind of lame; check
 // if there's a more intuitive way of doing it right
-private object Accumulators {
+private object Accumulators extends Logging {
   // TODO: Use soft references? => need to make readObject work properly then
   val originals = Map[Long, Accumulable[_, _]]()
   val localAccums = Map[Thread, Map[Long, Accumulable[_, _]]]()
@@ -271,6 +271,7 @@ private object Accumulators {
 
   // Add values to the original accumulators with some given IDs
   def add(values: Map[Long, Any]): Unit = synchronized {
+    logWarning(s"calling Accumulators.add with $values (originals is $originals)")
     for ((id, value) <- values) {
       if (originals.contains(id)) {
         originals(id).asInstanceOf[Accumulable[Any, Any]] ++= value

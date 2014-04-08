@@ -111,12 +111,16 @@ private[spark] object ClosureCleaner extends Logging {
     val innerClasses = getInnerClasses(func)
     val outerObjects = getOuterObjects(func)
     
+    val strace = Thread.currentThread.getStackTrace.toList.tail.map(_.toString).reduce(_ + "\n\t" + _)
+
+    logWarning(s"HEY, calling ClosureCleaner.clean on "+func.hashCode.toString+s"\n  COMING FROM $strace")
+
     val accessedFields = Map[Class[_], Set[String]]()
     for (cls <- outerClasses)
       accessedFields(cls) = Set[String]()
     for (cls <- func.getClass :: innerClasses)
       getClassReader(cls).accept(new FieldAccessFinder(accessedFields), 0)
-    //logInfo("accessedFields: " + accessedFields)
+    logWarning("accessedFields: " + accessedFields)
 
     val inInterpreter = {
       try {
@@ -143,13 +147,13 @@ private[spark] object ClosureCleaner extends Logging {
         val field = cls.getDeclaredField(fieldName)
         field.setAccessible(true)
         val value = field.get(obj)
-        //logInfo("1: Setting " + fieldName + " on " + cls + " to " + value);
+        logWarning("1: Setting " + fieldName + " on " + cls + " to " + value);
         field.set(outer, value)
       }
     }
     
     if (outer != null) {
-      //logInfo("2: Setting $outer on " + func.getClass + " to " + outer);
+      logWarning("2: Setting $outer on " + func.getClass + " to " + outer);
       val field = func.getClass.getDeclaredField("$outer")
       field.setAccessible(true)
       field.set(func, outer)
@@ -164,8 +168,10 @@ private[spark] object ClosureCleaner extends Logging {
 
   private def cloneViaSerializing[T: ClassTag](func: T): T = {
     try {
+      logWarning(s"about to try serializing $func")
       val serializer = SparkEnv.get.closureSerializer.newInstance()
-      serializer.deserialize[T](serializer.serialize[T](func))
+      val ret = serializer.deserialize[T](serializer.serialize[T](func))
+      ret
     } catch {
       case ex: Exception => throw new SparkException("Task not serializable: " + ex.toString)
     }

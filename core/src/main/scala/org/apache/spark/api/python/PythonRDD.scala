@@ -30,6 +30,8 @@ import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.util.Utils
 
+import org.apache.spark.Logging
+
 private[spark] class PythonRDD[T: ClassTag](
     parent: RDD[T],
     command: Array[Byte],
@@ -39,7 +41,7 @@ private[spark] class PythonRDD[T: ClassTag](
     pythonExec: String,
     broadcastVars: JList[Broadcast[Array[Byte]]],
     accumulator: Accumulator[JList[Array[Byte]]])
-  extends RDD[Array[Byte]](parent) {
+  extends RDD[Array[Byte]](parent) with Logging {
 
   val bufferSize = conf.getInt("spark.buffer.size", 65536)
 
@@ -154,12 +156,16 @@ private[spark] class PythonRDD[T: ClassTag](
               // We've finished the data section of the output, but we can still
               // read some accumulator updates:
               val numAccumulatorUpdates = stream.readInt()
-              (1 to numAccumulatorUpdates).foreach { _ =>
+              (1 to numAccumulatorUpdates).foreach { x =>
                 val updateLen = stream.readInt()
                 val update = new Array[Byte](updateLen)
                 stream.readFully(update)
-                accumulator += Collections.singletonList(update)
-
+		val updatevals = update.toList.map(_.toString).reduce(_ + ", " + _)
+		logWarning(s"processing update $x; values are $updatevals")
+		val sl = Collections.singletonList(update)
+	        logWarning(s"singleton list was $sl and accumulator value is " + accumulator.toString)
+                accumulator += sl
+		logWarning("accumulator value is now " + accumulator.toString)
               }
               Array.empty[Byte]
           }
@@ -294,7 +300,7 @@ class BytesToString extends org.apache.spark.api.java.function.Function[Array[By
  * collects a list of pickled strings that we pass to Python through a socket.
  */
 private class PythonAccumulatorParam(@transient serverHost: String, serverPort: Int)
-  extends AccumulatorParam[JList[Array[Byte]]] {
+  extends AccumulatorParam[JList[Array[Byte]]] with Logging {
 
   Utils.checkHost(serverHost, "Expected hostname")
 
@@ -304,12 +310,16 @@ private class PythonAccumulatorParam(@transient serverHost: String, serverPort: 
 
   override def addInPlace(val1: JList[Array[Byte]], val2: JList[Array[Byte]])
       : JList[Array[Byte]] = {
+    val strace = Thread.currentThread.getStackTrace.toList.tail.map(_.toString).reduce(_ + "\n\t" + _)
+    logWarning(s"addInPlace called with $val1 and $val2 from\n$strace")
     if (serverHost == null) {
       // This happens on the worker node, where we just want to remember all the updates
+      logWarning(s"serverHost is null")
       val1.addAll(val2)
       val1
     } else {
       // This happens on the master, where we pass the updates to Python through a socket
+      logWarning(s"serverHost is $serverHost")
       val socket = new Socket(serverHost, serverPort)
       val in = socket.getInputStream
       val out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream, bufferSize))

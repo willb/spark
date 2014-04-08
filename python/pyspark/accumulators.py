@@ -92,6 +92,7 @@ import threading
 from pyspark.cloudpickle import CloudPickler
 from pyspark.serializers import read_int, PickleSerializer
 
+from traceback import format_stack
 
 pickleSer = PickleSerializer()
 
@@ -138,14 +139,14 @@ class Accumulator(object):
     def value(self):
         """Get the accumulator's value; only usable in driver program"""
         if self._deserialized:
-            raise Exception("Accumulator.value cannot be accessed inside tasks")
+            raise Exception("Accumulator.value cannot be accessed inside tasks" + "".join(format_stack()))
         return self._value
 
     @value.setter
     def value(self, value):
         """Sets the accumulator's value; only usable in driver program"""
         if self._deserialized:
-            raise Exception("Accumulator.value cannot be accessed inside tasks")
+            raise Exception("Accumulator.value cannot be accessed inside tasks" + "".join(format_stack()))
         self._value = value
 
     def add(self, term):
