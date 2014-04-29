@@ -31,6 +31,56 @@ import org.apache.spark.Logging
 import org.apache.spark.SparkEnv
 import org.apache.spark.SparkException
 
+sealed trait CleanedClosure {}
+
+sealed abstract class BoxedClosure[T <: AnyRef : ClassTag](f: T) {
+  def get: T = f
+}
+case class RawClosure1[T <: AnyRef : ClassTag, U <: AnyRef : ClassTag](f: T => U) 
+    extends BoxedClosure[T => U](f) 
+    with Function1[T, U] {
+  def apply(v:T): U = f.apply(v)
+}
+case class RawClosure2[T1 <: AnyRef : ClassTag, T2 <: AnyRef : ClassTag, U <: AnyRef : ClassTag](f: (T1,T2) => U) 
+    extends BoxedClosure[(T1, T2) => U](f) 
+    with Function2[T1, T2, U] {
+  def apply(v1: T1, v2: T2): U = f.apply(v1, v2)
+}
+case class RawClosure3[T1 <: AnyRef : ClassTag, T2 <: AnyRef : ClassTag, T3 <: AnyRef : ClassTag, U <: AnyRef : ClassTag](f: (T1,T2,T3) => U) 
+    extends BoxedClosure[(T1, T2, T3) => U](f) 
+    with Function3[T1, T2, T3, U] {
+  def apply(v1: T1, v2: T2, v3: T3): U = f.apply(v1, v2, v3)
+}
+case class RawClosure4[T1 <: AnyRef : ClassTag, T2 <: AnyRef : ClassTag, T3 <: AnyRef : ClassTag, T4 <: AnyRef : ClassTag, U <: AnyRef : ClassTag](f: (T1,T2,T3,T4) => U) 
+    extends BoxedClosure[(T1, T2, T3, T4) => U](f) 
+    with Function4[T1, T2, T3, T4, U] {
+  def apply(v1: T1, v2: T2, v3: T3, v4: T4): U = f.apply(v1, v2, v3, v4)
+}
+case class CleanedClosure1[T <: AnyRef : ClassTag, U <: AnyRef : ClassTag](f: T => U) 
+    extends BoxedClosure[T => U](f) 
+    with CleanedClosure 
+    with Function1[T, U] {
+  def apply(v:T): U = f.apply(v)
+}
+case class CleanedClosure2[T1 <: AnyRef : ClassTag, T2 <: AnyRef : ClassTag, U <: AnyRef : ClassTag](f: (T1,T2) => U) 
+    extends BoxedClosure[(T1, T2) => U](f) 
+    with CleanedClosure 
+    with Function2[T1, T2, U] {
+  def apply(v1: T1, v2: T2): U = f.apply(v1, v2)
+}
+case class CleanedClosure3[T1 <: AnyRef : ClassTag, T2 <: AnyRef : ClassTag, T3 <: AnyRef : ClassTag, U <: AnyRef : ClassTag](f: (T1,T2,T3) => U) 
+    extends BoxedClosure[(T1, T2, T3) => U](f) 
+    with CleanedClosure 
+    with Function3[T1, T2, T3, U] {
+  def apply(v1: T1, v2: T2, v3: T3): U = f.apply(v1, v2, v3)
+}
+case class CleanedClosure4[T1 <: AnyRef : ClassTag, T2 <: AnyRef : ClassTag, T3 <: AnyRef : ClassTag, T4 <: AnyRef : ClassTag, U <: AnyRef : ClassTag](f: (T1,T2,T3,T4) => U) 
+    extends BoxedClosure[(T1, T2, T3, T4) => U](f) 
+    with CleanedClosure 
+    with Function4[T1, T2, T3, T4, U] {
+  def apply(v1: T1, v2: T2, v3: T3, v4: T4): U = f.apply(v1, v2, v3, v4)
+}
+
 private[spark] object ClosureCleaner extends Logging {
   // Get an ASM class reader for a given class from the JAR that loaded it
   private def getClassReader(cls: Class[_]): ClassReader = {
