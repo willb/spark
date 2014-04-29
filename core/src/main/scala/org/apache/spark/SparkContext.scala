@@ -1180,14 +1180,6 @@ class SparkContext(config: SparkConf) extends Logging {
   /**
    * Clean a closure to make it ready to serialized and send to tasks
    * (removes unreferenced variables in $outer's, updates REPL variables)
-   */
-  private[spark] def clean[F <: AnyRef : ClassTag](f: F): F = {
-    clean(f, true)
-  }
-
-  /**
-   * Clean a closure to make it ready to serialized and send to tasks
-   * (removes unreferenced variables in $outer's, updates REPL variables)
    *
    * @param f closure to be cleaned and optionally serialized
    * @param captureNow whether or not to serialize this closure and capture any free 
