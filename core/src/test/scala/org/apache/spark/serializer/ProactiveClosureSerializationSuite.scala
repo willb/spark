@@ -42,8 +42,10 @@ class ProactiveClosureSerializationSuite extends FunSuite with SharedSparkContex
     val ex = intercept[SparkException] {
       data.map(uc.op(_)).count
     }
-        
-    assert(ex.getMessage.matches(".*Task not serializable.*"))
+    
+    val msg = ex.getMessage
+    val tos = ex.toString
+    assert(ex.getMessage.contains("Task not serializable"))
   }
 
   // There is probably a cleaner way to eliminate boilerplate here, but we're
@@ -63,7 +65,7 @@ class ProactiveClosureSerializationSuite extends FunSuite with SharedSparkContex
         xf(data, uc)
       }
 
-      assert(ex.getMessage.matches(".*Task not serializable.*"), s"RDD.$name doesn't proactively throw NotSerializableException")
+    assert(ex.getMessage.contains("Task not serializable"), s"RDD.$name doesn't proactively throw NotSerializableException")
     }
   }
   
