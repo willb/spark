@@ -35,31 +35,32 @@ import org.apache.spark.SparkException
 
 sealed trait CleanedClosure {}
 
-sealed abstract class BoxedClosure[T <: Any : ClassTag](f: T) {
+sealed abstract class BoxedClosure[T <: Any : ClassTag](f: T, orig: T) {
   def get: T = f
+  def getOrig: T = orig
   def clean(cleaner: T => T): BoxedClosure[T] = this
 }
 case class CleanedClosure1[T <: Any : ClassTag,
-                           U <: Any : ClassTag](f: T => U) 
-    extends BoxedClosure[T => U](f) 
-    with CleanedClosure 
+                           U <: Any : ClassTag](f: T => U, orig: T => U) 
+    extends BoxedClosure[T => U](f, orig) 
+    with CleanedClosure
     with Function1[T, U] {
   def apply(v:T): U = f.apply(v)
 }
 case class CleanedClosure2[T1 <: Any : ClassTag,
                            T2 <: Any : ClassTag,
-                           U <: Any : ClassTag](f: (T1,T2) => U) 
-    extends BoxedClosure[(T1, T2) => U](f) 
-    with CleanedClosure 
+                           U <: Any : ClassTag](f: (T1,T2) => U, orig: (T1,T2) => U) 
+    extends BoxedClosure[(T1, T2) => U](f, orig) 
+    with CleanedClosure
     with Function2[T1, T2, U] {
   def apply(v1: T1, v2: T2): U = f.apply(v1, v2)
 }
 case class CleanedClosure3[T1 <: Any : ClassTag,
                            T2 <: Any : ClassTag,
                            T3 <: Any : ClassTag,
-                           U <: Any : ClassTag](f: (T1,T2,T3) => U) 
-    extends BoxedClosure[(T1, T2, T3) => U](f) 
-    with CleanedClosure 
+                           U <: Any : ClassTag](f: (T1,T2,T3) => U, orig: (T1,T2,T3) => U) 
+    extends BoxedClosure[(T1, T2, T3) => U](f, orig) 
+    with CleanedClosure
     with Function3[T1, T2, T3, U] {
   def apply(v1: T1, v2: T2, v3: T3): U = f.apply(v1, v2, v3)
 }
@@ -67,37 +68,37 @@ case class CleanedClosure4[T1 <: Any : ClassTag,
                            T2 <: Any : ClassTag,
                            T3 <: Any : ClassTag,
                            T4 <: Any : ClassTag,
-                           U <: Any : ClassTag](f: (T1,T2,T3,T4) => U) 
-    extends BoxedClosure[(T1, T2, T3, T4) => U](f) 
-    with CleanedClosure 
+                           U <: Any : ClassTag](f: (T1,T2,T3,T4) => U, orig: (T1,T2,T3,T4) => U) 
+    extends BoxedClosure[(T1, T2, T3, T4) => U](f, orig) 
+    with CleanedClosure
     with Function4[T1, T2, T3, T4, U] {
   def apply(v1: T1, v2: T2, v3: T3, v4: T4): U = f.apply(v1, v2, v3, v4)
 }
 
 private[spark] object BoxedClosure {
   def make[T <: Any : ClassTag,
-           U <: Any : ClassTag](f: T => U): T => U =
-    CleanedClosure1[T,U](f).asInstanceOf[Function1[T,U]]
+           U <: Any : ClassTag](f: T => U, orig: T => U): T => U =
+    CleanedClosure1[T,U](f, orig).asInstanceOf[Function1[T,U]]
 
   def make[T1 <: Any : ClassTag,
            T2 <: Any : ClassTag,
-           U <: Any : ClassTag](f: (T1, T2) => U): (T1, T2) => U =
-    CleanedClosure2[T1,T2,U](f).asInstanceOf[Function2[T1,T2,U]]
+           U <: Any : ClassTag](f: (T1, T2) => U, orig: (T1, T2) => U): (T1, T2) => U =
+    CleanedClosure2[T1,T2,U](f, orig).asInstanceOf[Function2[T1,T2,U]]
 
   def make[T1 <: Any : ClassTag,
            T2 <: Any : ClassTag,
            T3 <: Any : ClassTag,
-           U <: Any : ClassTag](f: (T1, T2, T3) => U): (T1, T2, T3) => U =
-    CleanedClosure3[T1,T2,T3,U](f).asInstanceOf[Function3[T1,T2,T3,U]]
+           U <: Any : ClassTag](f: (T1, T2, T3) => U, orig: (T1, T2, T3) => U): (T1, T2, T3) => U =
+    CleanedClosure3[T1,T2,T3,U](f, orig).asInstanceOf[Function3[T1,T2,T3,U]]
 
   def make[T1 <: Any : ClassTag,
            T2 <: Any : ClassTag,
            T3 <: Any : ClassTag,
            T4 <: Any : ClassTag,
-           U <: Any : ClassTag](f: (T1, T2, T3, T4) => U): (T1, T2, T3, T4) => U =
-     CleanedClosure4[T1,T2,T3,T4,U](f).asInstanceOf[Function4[T1,T2,T3,T4,U]]
+           U <: Any : ClassTag](f: (T1, T2, T3, T4) => U, orig: (T1, T2, T3, T4) => U): (T1, T2, T3, T4) => U =
+     CleanedClosure4[T1,T2,T3,T4,U](f, orig).asInstanceOf[Function4[T1,T2,T3,T4,U]]
 
-  def make[T <: Any](f: T): T = f
+  def make[T <: Any](f: T, orig: Any): T = f
 
   def boxable(f: Any): Boolean = {
     f match {
@@ -239,7 +240,7 @@ private[spark] object ClosureCleaner extends Logging {
     }
     
     if (captureNow && BoxedClosure.boxable(func)) {
-      BoxedClosure.make(cloneViaSerializing(func))
+      BoxedClosure.make(cloneViaSerializing(func), func)
     } else {
       func
     }
