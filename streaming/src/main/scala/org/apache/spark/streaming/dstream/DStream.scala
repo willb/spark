@@ -532,7 +532,7 @@ abstract class DStream[T: ClassTag] (
    * 'this' DStream will be registered as an output stream and therefore materialized.
    */
   def foreachRDD(foreachFunc: (RDD[T], Time) => Unit) {
-    new ForEachDStream(this, context.sparkContext.clean(foreachFunc)).register()
+    new ForEachDStream(this, context.sparkContext.clean(foreachFunc, false)).register()
   }
 
   /**
