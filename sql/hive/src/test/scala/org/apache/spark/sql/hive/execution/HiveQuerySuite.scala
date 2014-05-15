@@ -17,7 +17,15 @@
 
 package org.apache.spark.sql.hive.execution
 
+import org.scalatest.FunSuite
+
+import org.apache.spark.sql.hive._
+import org.apache.spark.sql.hive.test.TestHive
 import org.apache.spark.sql.hive.test.TestHive._
+
+class TpcdsSuite extends FunSuite {
+  test("parses") { new TPCDS(TestHive)}
+}
 
 /**
  * A set of test cases expressed in Hive QL that are not covered by the tests included in the hive distribution.
