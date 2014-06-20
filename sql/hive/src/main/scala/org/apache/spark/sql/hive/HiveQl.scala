@@ -581,12 +581,9 @@ private[hive] object HiveQl {
         val withDistinct =
           if (selectDistinctClause.isDefined) Distinct(withProject) else withProject
 
+        // Note that HAVING without GROUP BY simply acts like a WHERE
         val withHaving = havingClause.map { h => 
-
-          if (groupByClause == None) {
-            throw new SemanticException("HAVING specified without GROUP BY")
-          }
-
+          
           val havingExpr = h.getChildren.toSeq match {
             case Seq(hexpr) => nodeToExpr(hexpr)
           }

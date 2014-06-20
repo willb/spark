@@ -239,12 +239,6 @@ class HiveQuerySuite extends HiveComparisonTest {
     
     TestHive.reset()
   }
-
-  test("SPARK-2180:  HAVING without GROUP BY raises exception") {
-    intercept[Exception] {
-      hql("SELECT value, attr FROM having_test HAVING attr > 3")
-    }
-  }
   
   test("SPARK-2180:  HAVING with non-boolean clause raises no exceptions") {
     val results = hql("select key, count(*) c from src group by key having c").collect()
