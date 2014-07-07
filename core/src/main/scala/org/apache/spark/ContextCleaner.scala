@@ -20,6 +20,8 @@ package org.apache.spark
 import java.lang.ref.{ReferenceQueue, WeakReference}
 
 import scala.collection.mutable.{ArrayBuffer, SynchronizedBuffer}
+import scala.reflect.ClassTag
+import scala.util.DynamicVariable
 
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
@@ -217,8 +219,19 @@ private[spark] class ContextCleaner(sc: SparkContext) extends Logging {
   private def mapOutputTrackerMaster = sc.env.mapOutputTracker.asInstanceOf[MapOutputTrackerMaster]
 }
 
-private object ContextCleaner {
+private[spark] object ContextCleaner {
   private val REF_QUEUE_POLL_TIMEOUT = 100
+  val currentCleaner = new DynamicVariable[Option[ContextCleaner]](None)
+  
+  /**
+   * Runs the given thunk with a dynamically-scoped binding for the current ContextCleaner.
+   * This is necessary for blocks of code that serialize and deserialize broadcast variable
+   * objects, since all clones of a Broadcast object <tt>b</tt> need to be re-registered with the
+   * context cleaner that is tracking <tt>b</tt>.
+   */
+  def withCurrentCleaner[T <: Any : ClassTag](cc: Option[ContextCleaner])(thunk: => T) = {
+    currentCleaner.withValue(cc)(thunk)
+  }
 }
 
 /**
