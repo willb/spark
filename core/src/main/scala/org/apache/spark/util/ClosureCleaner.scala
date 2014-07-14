@@ -28,8 +28,99 @@ import com.esotericsoftware.reflectasm.shaded.org.objectweb.asm.{ClassReader, Cl
 import com.esotericsoftware.reflectasm.shaded.org.objectweb.asm.Opcodes._
 
 import org.apache.spark.{Logging, SparkEnv, SparkException, SparkContext, ContextCleaner}
+import org.apache.spark.serializer.SerializerInstance
+
+private[spark] sealed trait CleanedClosure {}
+
+private[spark] sealed abstract class BoxedClosure[T <: Any : ClassTag](f: T) {
+  def get: T = f
+}
+
+private[spark] case class CleanedClosure1[T <: Any : ClassTag,
+                                          U <: Any : ClassTag](f: T => U) 
+    extends BoxedClosure[T => U](f) 
+    with CleanedClosure 
+    with Function1[T, U] {
+  def apply(v:T): U = f.apply(v)
+}
+
+private[spark] case class CleanedClosure2[T1 <: Any : ClassTag,
+                                          T2 <: Any : ClassTag,
+                                          U <: Any : ClassTag](f: (T1,T2) => U) 
+    extends BoxedClosure[(T1, T2) => U](f) 
+    with CleanedClosure 
+    with Function2[T1, T2, U] {
+  def apply(v1: T1, v2: T2): U = f.apply(v1, v2)
+}
+
+private[spark] case class CleanedClosure3[T1 <: Any : ClassTag,
+                                          T2 <: Any : ClassTag,
+                                          T3 <: Any : ClassTag,
+                                          U <: Any : ClassTag](f: (T1,T2,T3) => U) 
+    extends BoxedClosure[(T1, T2, T3) => U](f) 
+    with CleanedClosure 
+    with Function3[T1, T2, T3, U] {
+  def apply(v1: T1, v2: T2, v3: T3): U = f.apply(v1, v2, v3)
+}
+
+private[spark] case class CleanedClosure4[T1 <: Any : ClassTag,
+                                          T2 <: Any : ClassTag,
+                                          T3 <: Any : ClassTag,
+                                          T4 <: Any : ClassTag,
+                                          U <: Any : ClassTag](f: (T1,T2,T3,T4) => U) 
+    extends BoxedClosure[(T1, T2, T3, T4) => U](f) 
+    with CleanedClosure 
+    with Function4[T1, T2, T3, T4, U] {
+  def apply(v1: T1, v2: T2, v3: T3, v4: T4): U = f.apply(v1, v2, v3, v4)
+}
+
+private[spark] object BoxedClosure {
+  def make[T <: Any : ClassTag,
+           U <: Any : ClassTag](f: T => U): T => U =
+    CleanedClosure1[T,U](f).asInstanceOf[Function1[T,U]]
+
+  def make[T1 <: Any : ClassTag,
+           T2 <: Any : ClassTag,
+           U <: Any : ClassTag](f: (T1, T2) => U): (T1, T2) => U =
+    CleanedClosure2[T1,T2,U](f).asInstanceOf[Function2[T1,T2,U]]
+
+  def make[T1 <: Any : ClassTag,
+           T2 <: Any : ClassTag,
+           T3 <: Any : ClassTag,
+           U <: Any : ClassTag](f: (T1, T2, T3) => U): (T1, T2, T3) => U =
+    CleanedClosure3[T1,T2,T3,U](f).asInstanceOf[Function3[T1,T2,T3,U]]
+
+  def make[T1 <: Any : ClassTag,
+           T2 <: Any : ClassTag,
+           T3 <: Any : ClassTag,
+           T4 <: Any : ClassTag,
+           U <: Any : ClassTag](f: (T1, T2, T3, T4) => U): (T1, T2, T3, T4) => U =
+     CleanedClosure4[T1,T2,T3,T4,U](f).asInstanceOf[Function4[T1,T2,T3,T4,U]]
+
+  def make[T <: Any](f: T): T = f
+
+  def boxable(f: Any): Boolean = {
+    f match {
+      case _:Function1[_,_] => true
+      case _:Function2[_,_,_] => true
+      case _:Function3[_,_,_,_] => true
+      case _:Function4[_,_,_,_,_] => true
+      case _ => false
+    }
+  }
+}
 
 private[spark] object ClosureCleaner extends Logging {
+  private val serializerHandle = new ThreadLocal[SerializerInstance]()
+  
+  private def serializer = {
+    if(serializerHandle.get == null) {
+      serializerHandle.set(SparkEnv.get.closureSerializer.newInstance())
+    }
+    
+    serializerHandle.get
+  }
+  
   // Get an ASM class reader for a given class from the JAR that loaded it
   private def getClassReader(cls: Class[_]): ClassReader = {
     // Copy data over, before delegating to ClassReader - else we can run out of open file handles.
@@ -103,7 +194,13 @@ private[spark] object ClosureCleaner extends Logging {
     }
   }
   
-  def clean[F <: AnyRef : ClassTag](func: F, captureNow: Boolean = true, sc: SparkContext): F = {
+  def clean[F <: AnyRef : ClassTag](func: F, captureNow: Boolean, sc: SparkContext): F = {
+    if (func.isInstanceOf[CleanedClosure]) func else actuallyClean(func, captureNow, sc)
+  }
+  
+  def actuallyClean[F <: AnyRef : ClassTag](func: F, 
+      captureNow: Boolean, 
+      sc: SparkContext): F = {
     // TODO: cache outerClasses / innerClasses / accessedFields
     val outerClasses = getOuterClasses(func)
     val innerClasses = getInnerClasses(func)
@@ -156,9 +253,9 @@ private[spark] object ClosureCleaner extends Logging {
       field.set(func, outer)
     }
     
-    if (captureNow) {
+    if (captureNow && BoxedClosure.boxable(func)) {
       ContextCleaner.withCurrentCleaner(sc.cleaner){
-        cloneViaSerializing(func)
+        BoxedClosure.make(cloneViaSerializing(func))
       }
     } else {
       func
@@ -167,15 +264,16 @@ private[spark] object ClosureCleaner extends Logging {
 
   private def cloneViaSerializing[T: ClassTag](func: T): T = {
     try {
-      val serializer = SparkEnv.get.closureSerializer.newInstance()
-      serializer.deserialize[T](serializer.serialize[T](func))
+      val bb = serializer.serialize[T](func)
+      logWarning("serializing a func with size " + bb.array().length)
+      serializer.deserialize[T](bb)
     } catch {
       case ex: Exception => throw new SparkException("Task not serializable", ex)
     }
   }
 
   private def instantiateClass(cls: Class[_], outer: AnyRef, inInterpreter: Boolean): AnyRef = {
-    // logInfo("Creating a " + cls + " with outer = " + outer)
+    logWarning("Creating a " + cls + " with outer = " + outer)
     if (!inInterpreter) {
       // This is a bona fide closure class, whose constructor has no effects
       // other than to set its fields, so use its constructor
