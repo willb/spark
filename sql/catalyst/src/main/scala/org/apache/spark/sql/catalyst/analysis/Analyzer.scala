@@ -55,9 +55,8 @@ class Analyzer(catalog: Catalog, registry: FunctionRegistry, caseSensitive: Bool
       StarExpansion ::
       ResolveFunctions ::
       GlobalAggregates ::
+      UnresolvedHavingClauseAttributes :: 
       typeCoercionRules :_*),
-    Batch("Having", fixedPoint,
-      (UnresolvedHavingClauseAttributes :: ResolveReferences :: Nil) : _*),
     Batch("Check Analysis", Once,
       CheckResolution),
     Batch("AnalysisOperators", fixedPoint,
