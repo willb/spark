@@ -56,8 +56,8 @@ class Analyzer(catalog: Catalog, registry: FunctionRegistry, caseSensitive: Bool
       ResolveFunctions ::
       GlobalAggregates ::
       typeCoercionRules :_*),
-    Batch("UnresolvedFilterAttributes", fixedPoint,
-      UnresolvedHavingClauseAttributes),
+    Batch("Having", fixedPoint,
+      (UnresolvedHavingClauseAttributes :: ResolveReferences :: Nil) : _*),
     Batch("Check Analysis", Once,
       CheckResolution),
     Batch("AnalysisOperators", fixedPoint,
@@ -160,25 +160,28 @@ class Analyzer(catalog: Catalog, registry: FunctionRegistry, caseSensitive: Bool
    * aggregates and then projects them away above the filter.
    */
   object UnresolvedHavingClauseAttributes extends Rule[LogicalPlan] {
-    def apply(plan: LogicalPlan): LogicalPlan = plan transform {
-      case pl @ Filter(fexp, agg @ Aggregate(_, ae, _)) if !fexp.childrenResolved => {
-        val alias = Alias(fexp, makeTmp())()
+    val condName = "havingCondition"
+    val trueLit = Literal(true, BooleanType)
+    
+    def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
+      case pl @ Filter(cond, agg @ Aggregate(_, ae, _)) 
+          if !cond.childrenResolved && !skipFilter(cond) => {
+        val alias = Alias(cond, condName)()
         val aggExprs = Seq(alias) ++ ae
         
-        val newCond = EqualTo(Cast(alias.toAttribute, BooleanType), Literal(true, BooleanType))
+        val newCond = EqualTo(alias.toAttribute, trueLit)
 
-        val newFilter = ResolveReferences(pl.copy(condition = newCond,
-          child = agg.copy(aggregateExpressions = aggExprs)))
+        val newFilter = pl.copy(condition = newCond, 
+            child = agg.copy(aggregateExpressions = aggExprs))
         
         Project(pl.output, newFilter)
       }
     }
-
-    private val curId = new java.util.concurrent.atomic.AtomicLong()
     
-    private def makeTmp() = {
-      val id = curId.getAndIncrement()
-      s"tmp_cond_$id"
+    // We don't want to process filters that we generated
+    private def skipFilter(exp: Expression): Boolean = exp match {
+      case EqualTo(UnresolvedAttribute(condName), trueLit) => true
+      case _ => false
     }
   }
 
