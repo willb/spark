@@ -113,7 +113,7 @@ private[spark] object BoxedClosure {
 private[spark] object ClosureCleaner extends Logging {
   private val serializerHandle = new ThreadLocal[SerializerInstance]()
   
-  private def serializer = {
+  private def serializer() = {
     if(serializerHandle.get == null) {
       serializerHandle.set(SparkEnv.get.closureSerializer.newInstance())
     }
