@@ -1085,7 +1085,7 @@ class SparkContext(config: SparkConf) extends Logging {
     // There's no need to check this function for serializability,
     // since it will be run right away.
     val cleanedFunc = clean(func, false)
-    logInfo("Starting job: " + callSite.short)
+    logInfo("Starting job: " + callSite.shortForm)
     val start = System.nanoTime
     dagScheduler.runJob(rdd, cleanedFunc, partitions, callSite, allowLocal,
       resultHandler, localProperties.get)
