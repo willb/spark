@@ -24,11 +24,12 @@ import scala.collection.mutable.Set
 
 import scala.reflect.ClassTag
 
+import com.esotericsoftware.kryo.{Kryo, KryoException}
 import com.esotericsoftware.reflectasm.shaded.org.objectweb.asm.{ClassReader, ClassVisitor, MethodVisitor, Type}
 import com.esotericsoftware.reflectasm.shaded.org.objectweb.asm.Opcodes._
 
 import org.apache.spark.{Logging, SparkEnv, SparkException, SparkContext, ContextCleaner}
-import org.apache.spark.serializer.SerializerInstance
+import org.apache.spark.serializer.{SerializerInstance, KryoSerializer}
 
 private[spark] sealed trait CleanedClosure {}
 
@@ -111,14 +112,14 @@ private[spark] object BoxedClosure {
 }
 
 private[spark] object ClosureCleaner extends Logging {
-  private val serializerHandle = new ThreadLocal[SerializerInstance]()
+  private val kryoHandle = new ThreadLocal[Kryo]()
   
-  private def serializer() = {
-    if(serializerHandle.get == null) {
-      serializerHandle.set(SparkEnv.get.closureSerializer.newInstance())
+  private def getKryo(sc: SparkContext) = {
+    if(kryoHandle.get == null) {
+      kryoHandle.set(new KryoSerializer(sc.getConf).newKryo())
     }
     
-    serializerHandle.get
+    kryoHandle.get
   }
   
   // Get an ASM class reader for a given class from the JAR that loaded it
@@ -207,6 +208,8 @@ private[spark] object ClosureCleaner extends Logging {
     val outerObjects = getOuterObjects(func)
 
     val accessedFields = Map[Class[_], Set[String]]()
+
+    val kryo = getKryo(sc)
     
     getClassReader(func.getClass).accept(new ReturnStatementFinder(), 0)
     
@@ -250,27 +253,27 @@ private[spark] object ClosureCleaner extends Logging {
       // logInfo("2: Setting $outer on " + func.getClass + " to " + outer);
       val field = func.getClass.getDeclaredField("$outer")
       field.setAccessible(true)
-      field.set(func, outer)
+      field.set(func, kryo.copyShallow(outer))
     }
     
     if (captureNow && BoxedClosure.boxable(func)) {
       ContextCleaner.withCurrentCleaner(sc.cleaner){
-        BoxedClosure.make(cloneViaSerializing(func))
+        BoxedClosure.make(kryo.copyShallow(func))
       }
     } else {
       func
     }
   }
 
-  private def cloneViaSerializing[T: ClassTag](func: T): T = {
-    try {
-      val bb = serializer.serialize[T](func)
-      logWarning("serializing a func with size " + bb.array().length)
-      serializer.deserialize[T](bb)
-    } catch {
-      case ex: Exception => throw new SparkException("Task not serializable", ex)
-    }
-  }
+  // private def cloneViaSerializing[T: ClassTag](func: T): T = {
+  //   try {
+  //     val bb = serializer.serialize[T](func)
+  //     logWarning("serializing a func with size " + bb.array().length)
+  //     serializer.deserialize[T](bb)
+  //   } catch {
+  //     case ex: Exception => throw new SparkException("Task not serializable", ex)
+  //   }
+  // }
 
   private def instantiateClass(cls: Class[_], outer: AnyRef, inInterpreter: Boolean): AnyRef = {
     logWarning("Creating a " + cls + " with outer = " + outer)
