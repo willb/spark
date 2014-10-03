@@ -25,6 +25,7 @@ import sbtunidoc.Plugin.genjavadocSettings
 import org.scalastyle.sbt.ScalastylePlugin.{Settings => ScalaStyleSettings}
 import com.typesafe.sbt.pom.{PomBuild, SbtPomKeys}
 import net.virtualvoid.sbt.graph.Plugin.graphSettings
+import scoverage.ScoverageSbtPlugin._
 
 object BuildCommons {
 
@@ -365,6 +366,6 @@ object TestSettings {
       ).mkString(":"),
       "-doc-title", "Spark " + version.value.replaceAll("-SNAPSHOT", "") + " ScalaDoc"
     )
-  )
+  ) ++ instrumentSettings
 
 }

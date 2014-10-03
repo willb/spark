@@ -4,11 +4,15 @@ resolvers += Resolver.url("artifactory", url("http://scalasbt.artifactoryonline.
 
 resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
 
+resolvers += Classpaths.sbtPluginReleases
+
 addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.11.2")
 
 addSbtPlugin("com.typesafe.sbteclipse" % "sbteclipse-plugin" % "2.2.0")
 
 addSbtPlugin("com.github.mpeltonen" % "sbt-idea" % "1.6.0")
+
+addSbtPlugin("org.scoverage" %% "sbt-scoverage" % "0.99.7.1")
 
 // For Sonatype publishing
 //resolvers += Resolver.url("sbt-plugin-releases", new URL("http://scalasbt.artifactoryonline.com/scalasbt/sbt-plugin-releases/"))(Resolver.ivyStylePatterns)
